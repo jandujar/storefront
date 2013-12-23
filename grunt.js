@@ -4,7 +4,14 @@ require('shelljs/global');
 
 module.exports = function (grunt) {
 
-    var distFolder = "soomla_ui", themeFolder, theme;
+    // Define folders
+    var distFolder      = "./dist",
+        deployFolder    = "./deploy",
+        srcFolder       = "./src",
+        themesFolder    = "storefront-themes/themes",
+        lessFiles       = {};
+
+    lessFiles[distFolder + "/css/store.css"] = srcFolder + "/css/store.less";
 
     // Project configuration.
     var config = {
@@ -18,35 +25,28 @@ module.exports = function (grunt) {
         },
         less : {
             store : {
-                src  :'css/store.less',
-                dest :distFolder + '/css/store.css',
+                files: lessFiles,
                 options : {
                     compress : true
                 }
             }
         },
         requirejs : {
-            baseUrl         : 'js',
-            mainConfigFile  : 'js/main-store.js',
-            name            : "main-store",
-            out             : distFolder + "/js/main-store.js"
-        },
-        rig : {
-            all : {
-                src  : "js/views/templates.js",
-                dest : "js/views/templates.js"
-            }
+            baseUrl         : srcFolder + '/js',
+            mainConfigFile  : srcFolder + '/js/main.js',
+            name            : "main",
+            out             : distFolder + "/js/main.js"
         }
     };
 
-    var themes = ls("themes");
+    // Uncomment to prevent code obfuscation
+    // config.requirejs.optimize = "none";
+
 
     grunt.initConfig(config);
 
-    grunt.loadNpmTasks('grunt-less');
+    grunt.loadNpmTasks('grunt-contrib-less');
     grunt.loadNpmTasks('grunt-requirejs');
-    grunt.loadNpmTasks('grunt-handlebars');
-    grunt.loadNpmTasks('grunt-rigger');
 
 
     // Register helper tasks
@@ -54,75 +54,54 @@ module.exports = function (grunt) {
     grunt.registerTask('copy', 'Copies more necessary resources to the distribution folder', function() {
 
         // Copy Javascript
-        mkdir("-p", distFolder + "/js/libs");
-        mkdir("-p", distFolder + "/themes");
-        cp("js/libs/require.js", distFolder + "/js/libs/");
+        mkdir("-p", distFolder + "/js/libs", distFolder + "/css/mixins");
+        cp(srcFolder + "/js/libs/require.js", distFolder + "/js/libs/");
 
-        // Copy HTML & images
-        cp("-R", "img", "store.html", distFolder + "/");
-
-        // Copy themes
-        cp("-R", "themes/" + theme + "/", distFolder + "/themes/");
+        // Copy HTML + Less
+        cp("-R", srcFolder + "/store.html", srcFolder + "/css.handlebars", distFolder + "/");
+        cp("-R", srcFolder + "/css/mixins/bootstrap", distFolder + "/css/mixins/");
+        cp("-R", srcFolder + "/css/mixins/layout.less", distFolder + "/css/mixins/");
+        cp("-R", srcFolder + "/css/img", distFolder + "/css/");
 
         // Uncomment this block for deploying with mobile-preview.html.
         // This is helpful when you want to build your theme and test it
         // in a browser after it was built
         // ===================================================================
         // mkdir("-p", distFolder + "/js/libs/jquery");
-        // cp("js/libs/jquery/jquery-1.8.0.min.js", distFolder + "/js/libs/jquery");
+        // cp("js/libs/jquery/jquery-1.9.1.min.js", distFolder + "/js/libs/jquery");
         // cp("mobile-preview.html", distFolder + "/");
-
-        cp("js/views/templates.js", "./");
     });
 
     grunt.registerTask('clean', 'Cleans the distribution folder', function() {
-        rm("-rf", distFolder);
+        rm("-rf", deployFolder);
     });
 
-    grunt.registerTask('cleanup', 'Cleans leftover files from the build process', function() {
-        // Restore backed up file (before Handlebars templates were appended to it).
-        mv("-f", "./templates.js", "./js/views/templates.js");
 
-        // Remove auxiliary compiled Handlebars file
-        rm("-f", "./js/views/handlebars-templates.js");
-
-        // Remove LESS and Handlebars sources from the compiled theme
-        rm("-rf", themeFolder + "/less", themeFolder + "/templates");
+    //
+    // Prepares the source and distribution files in a deployment folder
+    //
+    grunt.registerTask('prepareDeploy', 'Cleans the distribution folder', function() {
+        mkdir("-p", deployFolder + "/src");
+        cp("-R", srcFolder + "/*", deployFolder + "/src");
+        mv(distFolder, deployFolder);
+        cp("store.html.erb", deployFolder);
     });
+
+    grunt.registerTask('production', function() {
+
+        // Add an external local copy of jquery
+        mkdir("-p", distFolder + "/js/libs/jquery");
+        cp(srcFolder + "/js/libs/jquery/jquery-1.*.min.js", distFolder + "/js/libs/jquery");
+
+        // Add mobile preview HTML
+        cp("./mobile-preview.html", distFolder);
+
+        // Add symlink to themes
+        exec("ln -s ../../" + themesFolder +  " " + distFolder + "/themes")
+    });
+
 
 
     // Default task.
-    grunt.registerTask("theme", "Builds the given theme. Compiles Handlebars templates and Less CSS, minifies and concatenates JS & CSS files", function(name) {
-
-        theme = name;
-        themeFolder = distFolder + '/themes/' + theme;
-
-        // Dynamically add less configuration specific to this theme
-        var lessConfig = grunt.config.get("less");
-        lessConfig[theme] = {
-            src  : themeFolder + '/less/*.less',
-            dest : themeFolder + '/' + theme + '.css',
-            options:{
-                compress:true
-            }
-        };
-
-        // Dynamically add handlebars configuration specific to this theme
-        grunt.config.set("handlebars", {
-            all: {
-                src: distFolder + "/themes/" + theme + "/templates",
-                dest: "./js/views/handlebars-templates.js"
-            }
-        });
-
-        // Dynamically add minify configuration specific to this theme
-        grunt.config.set("min", {
-            all: {
-                src: themeFolder + "/js/*",
-                dest: themeFolder + "/js/" + theme + "Views.js"
-            }
-        });
-
-        grunt.task.run('clean copy less handlebars rig min requirejs cleanup');
-    });
+    grunt.registerTask('default', 'clean copy less requirejs prepareDeploy');
 };

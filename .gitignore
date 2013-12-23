@@ -35,8 +35,8 @@ dwsync.xml
 intermediate
 publish
 .idea
-storefront/themes
 node_modules
+deploy
 
 # build script local files
 build/buildinfo.properties
@@ -47,3 +47,7 @@ build/config/buildinfo.properties
 css/**/*.css
 css/bootstrap.min.css
 # css/*.css
+
+# Soft links
+theme
+template
